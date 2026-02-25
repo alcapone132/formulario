@@ -3,7 +3,7 @@
 // =========================================
 
 // Configuración de la URL base de la API
-const API_URL = 'http://localhost:3000/api';
+const API_URL = '/api';
 
 // =========================================
 // FUNCIONES DE NAVEGACIÓN DE PESTAÑAS
@@ -222,11 +222,17 @@ document.getElementById('login-form').addEventListener('submit', async function(
             
             // Limpia el formulario
             limpiarFormulario(e.target);
-            
-            // Aquí puedes agregar lógica adicional después del login exitoso
-            // Por ejemplo: redirigir a otra página, guardar token, etc.
-            console.log('Usuario autenticado:', data.usuario);
-            console.log('Fecha de login:', data.fechaLogin);
+
+            // Guarda los datos de sesión
+            sessionStorage.setItem('sesion', JSON.stringify({
+                usuario: data.usuario,
+                fechaLogin: data.fechaLogin
+            }));
+
+            // Redirige al dashboard después de 1 segundo
+            setTimeout(() => {
+                window.location.href = '/dashboard.html';
+            }, 1000);
             
         } else {
             // Muestra mensaje de error
