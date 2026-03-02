@@ -15,7 +15,7 @@ const path = require('path');
 
 // Inicialización de la aplicación Express
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // =========================================
 // CONFIGURACIÓN DE MIDDLEWARES
@@ -277,7 +277,7 @@ app.get('/', (req, res) => {
 // =========================================
 
 // Inicia el servidor en el puerto especificado
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log('=========================================');
     console.log('🚀 SERVIDOR DE AUTENTICACIÓN INICIADO');
     console.log('=========================================');
