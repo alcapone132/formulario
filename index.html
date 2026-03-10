@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Autenticación</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Contenedor principal -->
+    <div class="container">
+        <!-- Encabezado -->
+        <header>
+            <h1>🔐 Sistema de Autenticación</h1>
+            <p>Registro e Inicio de Sesión</p>
+        </header>
+
+        <!-- Pestañas para alternar entre Registro e Inicio de sesión -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="mostrarTab('registro')">
+                Registro
+            </button>
+           <button class="tab-button" onclick="window.location.href='/dashboard.html'">Ir al Dashboard</button>
+        </div>
+
+        <!-- ===================================== -->
+        <!-- FORMULARIO DE REGISTRO -->
+        <!-- ===================================== -->
+        <div id="registro-tab" class="tab-content active">
+            <h2>Crear Nueva Cuenta</h2>
+            <form id="registro-form">
+                <!-- Campo de usuario -->
+                <div class="form-group">
+                    <label for="registro-usuario">Usuario</label>
+                    <input 
+                        type="text" 
+                        id="registro-usuario" 
+                        name="usuario"
+                        placeholder="Ingrese su usuario"
+                        required
+                        minlength="3"
+                        autocomplete="username"
+                    >
+                    <small>Mínimo 3 caracteres</small>
+                </div>
+
+                <!-- Campo de contraseña -->
+                <div class="form-group">
+                    <label for="registro-contrasena">Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="registro-contrasena" 
+                        name="contrasena"
+                        placeholder="Ingrese su contraseña"
+                        required
+                        minlength="6"
+                        autocomplete="new-password"
+                    >
+                    <small>Mínimo 6 caracteres</small>
+                </div>
+
+                <!-- Campo de confirmación de contraseña -->
+                <div class="form-group">
+                    <label for="registro-confirmar">Confirmar Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="registro-confirmar" 
+                        name="confirmar"
+                        placeholder="Confirme su contraseña"
+                        required
+                        minlength="6"
+                        autocomplete="new-password"
+                    >
+                </div>
+
+                <!-- Botón de registro -->
+                <button type="submit" class="btn btn-primary">
+                    Registrarse
+                </button>
+            </form>
+
+            <!-- Área de mensajes para registro -->
+            <div id="registro-mensaje" class="mensaje"></div>
+        </div>
+
+        <!-- ===================================== -->
+        <!-- FORMULARIO DE INICIO DE SESIÓN -->
+        <!-- ===================================== -->
+        <div id="login-tab" class="tab-content">
+            <h2>Iniciar Sesión</h2>
+            <form id="login-form">
+                <!-- Campo de usuario -->
+                <div class="form-group">
+                    <label for="login-usuario">Usuario</label>
+                    <input 
+                        type="text" 
+                        id="login-usuario" 
+                        name="usuario"
+                        placeholder="Ingrese su usuario"
+                        required
+                        autocomplete="username"
+                    >
+                </div>
+
+                <!-- Campo de contraseña -->
+                <div class="form-group">
+                    <label for="login-contrasena">Contraseña</label>
+                    <input 
+                        type="password" 
+                        id="login-contrasena" 
+                        name="contrasena"
+                        placeholder="Ingrese su contraseña"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <!-- Botón de inicio de sesión -->
+                <button type="submit" class="btn btn-primary">
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <!-- Área de mensajes para login -->
+            <div id="login-mensaje" class="mensaje"></div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>Sistema de Autenticación v1.0</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
