@@ -1,282 +1,263 @@
 // =========================================
 // SERVICIO WEB DE AUTENTICACIÓN
 // =========================================
-// Este servidor proporciona endpoints para registro e inicio de sesión
-// Autor: Sistema de Autenticación
-// Fecha: 2026
-
-// Importación de módulos necesarios
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 
-// Inicialización de la aplicación Express
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // =========================================
-// CONFIGURACIÓN DE MIDDLEWARES
+// CONFIGURACIÓN DE NODEMAILER (Gmail + IPv4)
 // =========================================
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    family: 4,              // ← fuerza IPv4, soluciona error en Render
+    secure: false,
+    auth: {
+        user: process.env.EMAIL_USER,   // tu-correo@gmail.com
+        pass: process.env.EMAIL_PASS    // contraseña de aplicación de Google
+    }
+});
 
-// Habilita CORS para permitir peticiones desde el frontend
+// =========================================
+// ALMACÉN TEMPORAL DE CÓDIGOS
+// { email: { codigo, expira, datosUsuario } }
+// =========================================
+const codigosPendientes = {};
+
+// =========================================
+// MIDDLEWARES
+// =========================================
 app.use(cors());
-
-// Parser para JSON en el body de las peticiones
 app.use(bodyParser.json());
-
-// Parser para datos de formularios
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// Servir archivos estáticos desde la carpeta 'public'
 app.use(express.static('public'));
 
 // =========================================
-// CONFIGURACIÓN DE BASE DE DATOS (JSON)
+// BASE DE DATOS (JSON)
 // =========================================
-
-// Ruta del archivo de base de datos
 const DB_PATH = path.join(__dirname, 'usuarios.json');
 
-/**
- * Función para leer la base de datos de usuarios
- * @returns {Array} Array de objetos de usuarios
- */
 function leerUsuarios() {
     try {
-        // Verifica si el archivo existe
         if (!fs.existsSync(DB_PATH)) {
-            // Si no existe, crea un archivo vacío con un array
             fs.writeFileSync(DB_PATH, JSON.stringify([], null, 2));
             return [];
         }
-        // Lee el archivo y parsea el JSON
-        const data = fs.readFileSync(DB_PATH, 'utf8');
-        return JSON.parse(data);
+        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     } catch (error) {
         console.error('Error al leer usuarios:', error);
         return [];
     }
 }
 
-/**
- * Función para guardar usuarios en la base de datos
- * @param {Array} usuarios - Array de objetos de usuarios
- */
 function guardarUsuarios(usuarios) {
     try {
-        // Escribe el array de usuarios en el archivo JSON con formato
         fs.writeFileSync(DB_PATH, JSON.stringify(usuarios, null, 2));
     } catch (error) {
         console.error('Error al guardar usuarios:', error);
     }
 }
 
-/**
- * Función para buscar un usuario por nombre de usuario
- * @param {string} usuario - Nombre de usuario a buscar
- * @returns {Object|null} Objeto del usuario o null si no existe
- */
 function buscarUsuario(usuario) {
-    const usuarios = leerUsuarios();
-    return usuarios.find(u => u.usuario === usuario) || null;
+    return leerUsuarios().find(u => u.usuario === usuario) || null;
 }
 
 // =========================================
-// ENDPOINTS DE LA API
+// HELPERS
+// =========================================
+
+// Genera código de 6 dígitos
+function generarCodigo() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Envía el email con el código
+async function enviarCodigoEmail(email, codigo) {
+    await transporter.sendMail({
+        from: `"Sistema de Autenticación" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: '🔐 Código de verificación',
+        html: `
+            <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:10px;">
+                <h2 style="color:#667eea;">Confirma tu registro</h2>
+                <p>Usa este código para completar tu registro:</p>
+                <div style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#764ba2;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;margin:20px 0;">
+                    ${codigo}
+                </div>
+                <p style="color:#999;font-size:12px;">Este código expira en 10 minutos.</p>
+            </div>
+        `
+    });
+}
+
+// =========================================
+// ENDPOINTS
 // =========================================
 
 /**
- * ENDPOINT: Registro de nuevo usuario
- * Método: POST
- * Ruta: /api/registro
- * Body: { usuario: string, contrasena: string }
+ * PASO 1 - Registro: recibe datos y envía código al email
+ * POST /api/registro
+ * Body: { usuario, contrasena }
  */
 app.post('/api/registro', async (req, res) => {
     try {
-        // Extrae usuario y contraseña del body de la petición
         const { usuario, contrasena } = req.body;
 
-        // Validación: Verifica que se envíen ambos campos
-        if (!usuario || !contrasena) {
-            return res.status(400).json({
-                exito: false,
-                mensaje: 'Error: Usuario y contraseña son requeridos'
-            });
-        }
+        if (!usuario || !contrasena)
+            return res.status(400).json({ exito: false, mensaje: 'Usuario y contraseña son requeridos' });
 
-        // Validación: Verifica longitud mínima de usuario
-        if (usuario.length < 3) {
-            return res.status(400).json({
-                exito: false,
-                mensaje: 'Error: El usuario debe tener al menos 3 caracteres'
-            });
-        }
+        if (usuario.length < 3)
+            return res.status(400).json({ exito: false, mensaje: 'El usuario debe tener al menos 3 caracteres' });
 
-        // Validación: Verifica longitud mínima de contraseña
-        if (contrasena.length < 6) {
-            return res.status(400).json({
-                exito: false,
-                mensaje: 'Error: La contraseña debe tener al menos 6 caracteres'
-            });
-        }
+        if (contrasena.length < 6)
+            return res.status(400).json({ exito: false, mensaje: 'La contraseña debe tener al menos 6 caracteres' });
 
-        // Verifica si el usuario ya existe
-        const usuarioExistente = buscarUsuario(usuario);
-        if (usuarioExistente) {
-            return res.status(409).json({
-                exito: false,
-                mensaje: 'Error: El usuario ya existe'
-            });
-        }
+        if (buscarUsuario(usuario))
+            return res.status(409).json({ exito: false, mensaje: 'El usuario ya existe' });
 
-        // Encripta la contraseña usando bcrypt (10 rounds de salt)
+        // Genera y guarda el código temporalmente
+        const codigo = generarCodigo();
         const contrasenaHash = await bcrypt.hash(contrasena, 10);
 
-        // Lee todos los usuarios existentes
-        const usuarios = leerUsuarios();
-
-        // Crea el nuevo objeto de usuario
-        const nuevoUsuario = {
-            id: Date.now(), // ID único basado en timestamp
-            usuario: usuario,
-            contrasena: contrasenaHash,
-            fechaRegistro: new Date().toISOString()
+        codigosPendientes[usuario] = {
+            codigo,
+            expira: Date.now() + 10 * 60 * 1000, // 10 minutos
+            datosUsuario: {
+                id: Date.now(),
+                usuario,
+                contrasena: contrasenaHash,
+                fechaRegistro: new Date().toISOString()
+            }
         };
 
-        // Agrega el nuevo usuario al array
-        usuarios.push(nuevoUsuario);
+        // Envía el código al email
+        await enviarCodigoEmail(usuario, codigo);
 
-        // Guarda el array actualizado en la base de datos
-        guardarUsuarios(usuarios);
+        console.log(`✓ Código enviado a: ${usuario}`);
 
-        // Log en consola del servidor
-        console.log(`✓ Usuario registrado: ${usuario}`);
-
-        // Respuesta exitosa
-        res.status(201).json({
+        res.status(200).json({
             exito: true,
-            mensaje: 'Registro exitoso',
-            usuario: usuario
+            mensaje: 'Código de verificación enviado a tu correo',
+            requiereVerificacion: true
         });
 
     } catch (error) {
-        // Manejo de errores del servidor
         console.error('Error en registro:', error);
-        res.status(500).json({
-            exito: false,
-            mensaje: 'Error interno del servidor'
-        });
+        res.status(500).json({ exito: false, mensaje: 'Error al enviar el código. Verifica que el correo sea válido.' });
     }
 });
 
 /**
- * ENDPOINT: Inicio de sesión
- * Método: POST
- * Ruta: /api/login
- * Body: { usuario: string, contrasena: string }
+ * PASO 2 - Verificar código y completar registro
+ * POST /api/verificar
+ * Body: { usuario, codigo }
+ */
+app.post('/api/verificar', (req, res) => {
+    try {
+        const { usuario, codigo } = req.body;
+
+        if (!usuario || !codigo)
+            return res.status(400).json({ exito: false, mensaje: 'Usuario y código son requeridos' });
+
+        const pendiente = codigosPendientes[usuario];
+
+        if (!pendiente)
+            return res.status(400).json({ exito: false, mensaje: 'No hay registro pendiente para este usuario' });
+
+        if (Date.now() > pendiente.expira) {
+            delete codigosPendientes[usuario];
+            return res.status(400).json({ exito: false, mensaje: 'El código expiró. Vuelve a registrarte.' });
+        }
+
+        if (pendiente.codigo !== codigo.trim())
+            return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
+
+        // Código correcto → guarda el usuario
+        const usuarios = leerUsuarios();
+        usuarios.push(pendiente.datosUsuario);
+        guardarUsuarios(usuarios);
+        delete codigosPendientes[usuario];
+
+        console.log(`✓ Usuario verificado y registrado: ${usuario}`);
+
+        res.status(201).json({
+            exito: true,
+            mensaje: 'Registro completado exitosamente',
+            usuario
+        });
+
+    } catch (error) {
+        console.error('Error en verificación:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
+    }
+});
+
+/**
+ * Login
+ * POST /api/login
  */
 app.post('/api/login', async (req, res) => {
     try {
-        // Extrae usuario y contraseña del body de la petición
         const { usuario, contrasena } = req.body;
 
-        // Validación: Verifica que se envíen ambos campos
-        if (!usuario || !contrasena) {
-            return res.status(400).json({
-                exito: false,
-                mensaje: 'Error en la autenticación: Datos incompletos'
-            });
-        }
+        if (!usuario || !contrasena)
+            return res.status(400).json({ exito: false, mensaje: 'Datos incompletos' });
 
-        // Busca el usuario en la base de datos
         const usuarioEncontrado = buscarUsuario(usuario);
+        if (!usuarioEncontrado)
+            return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
 
-        // Si el usuario no existe
-        if (!usuarioEncontrado) {
-            return res.status(401).json({
-                exito: false,
-                mensaje: 'Error en la autenticación: Usuario o contraseña incorrectos'
-            });
-        }
-
-        // Compara la contraseña proporcionada con el hash almacenado
         const contrasenaValida = await bcrypt.compare(contrasena, usuarioEncontrado.contrasena);
+        if (!contrasenaValida)
+            return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
 
-        // Si la contraseña no coincide
-        if (!contrasenaValida) {
-            return res.status(401).json({
-                exito: false,
-                mensaje: 'Error en la autenticación: Usuario o contraseña incorrectos'
-            });
-        }
+        console.log(`✓ Login exitoso: ${usuario}`);
 
-        // Log en consola del servidor
-        console.log(`✓ Inicio de sesión exitoso: ${usuario}`);
-
-        // Autenticación exitosa
         res.status(200).json({
             exito: true,
             mensaje: 'Autenticación satisfactoria',
-            usuario: usuario,
+            usuario,
             fechaLogin: new Date().toISOString()
         });
 
     } catch (error) {
-        // Manejo de errores del servidor
         console.error('Error en login:', error);
-        res.status(500).json({
-            exito: false,
-            mensaje: 'Error interno del servidor'
-        });
+        res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
     }
 });
 
 /**
- * ENDPOINT: Obtener todos los usuarios (solo para pruebas)
- * Método: GET
- * Ruta: /api/usuarios
- * NOTA: En producción este endpoint debería estar protegido o eliminado
+ * Listar usuarios (sin contraseñas)
+ * GET /api/usuarios
  */
 app.get('/api/usuarios', (req, res) => {
     try {
-        const usuarios = leerUsuarios();
-        // Envía usuarios sin las contraseñas por seguridad
-        const usuariosSeguros = usuarios.map(u => ({
+        const usuarios = leerUsuarios().map(u => ({
             id: u.id,
             usuario: u.usuario,
             fechaRegistro: u.fechaRegistro
         }));
-        res.status(200).json({
-            exito: true,
-            cantidad: usuariosSeguros.length,
-            usuarios: usuariosSeguros
-        });
+        res.status(200).json({ exito: true, cantidad: usuarios.length, usuarios });
     } catch (error) {
-        console.error('Error al obtener usuarios:', error);
-        res.status(500).json({
-            exito: false,
-            mensaje: 'Error interno del servidor'
-        });
+        res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
     }
 });
 
-/**
- * ENDPOINT: Ruta raíz
- * Método: GET
- * Ruta: /
- */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // =========================================
-// INICIALIZACIÓN DEL SERVIDOR
+// INICIO DEL SERVIDOR
 // =========================================
-
-// Inicia el servidor en el puerto especificado
 app.listen(PORT, () => {
     console.log('=========================================');
     console.log('🚀 SERVIDOR DE AUTENTICACIÓN INICIADO');
@@ -286,18 +267,18 @@ app.listen(PORT, () => {
     console.log(`📁 Base de datos: ${DB_PATH}`);
     console.log('=========================================');
     console.log('Endpoints disponibles:');
-    console.log('  POST /api/registro - Registro de usuarios');
-    console.log('  POST /api/login    - Inicio de sesión');
-    console.log('  GET  /api/usuarios - Listar usuarios');
+    console.log('  POST /api/registro  - Envía código al email');
+    console.log('  POST /api/verificar - Verifica código y crea cuenta');
+    console.log('  POST /api/login     - Inicio de sesión');
+    console.log('  GET  /api/usuarios  - Listar usuarios');
     console.log('=========================================');
 });
 
-// Manejo de errores no capturados
 process.on('uncaughtException', (error) => {
     console.error('Error no capturado:', error);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Promise rechazada no manejada:', reason);
+process.on('unhandledRejection', (reason) => {
+    console.error('Promise rechazada:', reason);
 });
 
