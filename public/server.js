@@ -1,68 +1,43 @@
-// =========================================
-// SERVICIO WEB DE AUTENTICACIÓN
-// =========================================
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 const https = require('https');
-const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// =========================================
-// ALMACÉN TEMPORAL DE CÓDIGOS
-// =========================================
+// Conexión a MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://af8791052_db_user:QzttH0rV6xNilcI6@cluster0.ro1kddo.mongodb.net/formulario')
+  .then(() => console.log('✅ MongoDB conectado'))
+  .catch(err => console.error('❌ Error MongoDB:', err));
+
+// Modelo de Usuario
+const usuarioSchema = new mongoose.Schema({
+  usuario: { type: String, required: true, unique: true },
+  contrasena: { type: String, required: true },
+  fechaRegistro: { type: Date, default: Date.now }
+});
+const Usuario = mongoose.model('Usuario', usuarioSchema);
+
+// Almacén temporal de códigos pendientes
 const codigosPendientes = {};
 
-// =========================================
-// MIDDLEWARES
-// =========================================
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // =========================================
-// BASE DE DATOS (JSON)
-// =========================================
-const DB_PATH = path.join(__dirname, 'usuarios.json');
-
-function leerUsuarios() {
-    try {
-        if (!fs.existsSync(DB_PATH)) {
-            fs.writeFileSync(DB_PATH, JSON.stringify([], null, 2));
-            return [];
-        }
-        return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    } catch (error) {
-        console.error('Error al leer usuarios:', error);
-        return [];
-    }
-}
-
-function guardarUsuarios(usuarios) {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(usuarios, null, 2));
-    } catch (error) {
-        console.error('Error al guardar usuarios:', error);
-    }
-}
-
-function buscarUsuario(usuario) {
-    return leerUsuarios().find(u => u.usuario === usuario) || null;
-}
-
-// =========================================
-// HELPERS
+// BREVO - Envío de email via API HTTP
 // =========================================
 function generarCodigo() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Envía email usando la API HTTP de Brevo (sin SMTP)
 function enviarCodigoEmail(email, codigo) {
     return new Promise((resolve, reject) => {
         const body = JSON.stringify({
@@ -114,21 +89,20 @@ function enviarCodigoEmail(email, codigo) {
 // ENDPOINTS
 // =========================================
 
-// PASO 1 - Registro: envía código al email
+// PASO 1 - Registro: valida y envía código
 app.post('/api/registro', async (req, res) => {
     try {
         const { usuario, contrasena } = req.body;
 
         if (!usuario || !contrasena)
             return res.status(400).json({ exito: false, mensaje: 'Usuario y contraseña son requeridos' });
-
         if (usuario.length < 3)
             return res.status(400).json({ exito: false, mensaje: 'El usuario debe tener al menos 3 caracteres' });
-
         if (contrasena.length < 6)
             return res.status(400).json({ exito: false, mensaje: 'La contraseña debe tener al menos 6 caracteres' });
 
-        if (buscarUsuario(usuario))
+        const existe = await Usuario.findOne({ usuario });
+        if (existe)
             return res.status(409).json({ exito: false, mensaje: 'El usuario ya existe' });
 
         const codigo = generarCodigo();
@@ -137,12 +111,7 @@ app.post('/api/registro', async (req, res) => {
         codigosPendientes[usuario] = {
             codigo,
             expira: Date.now() + 10 * 60 * 1000,
-            datosUsuario: {
-                id: Date.now(),
-                usuario,
-                contrasena: contrasenaHash,
-                fechaRegistro: new Date().toISOString()
-            }
+            contrasenaHash
         };
 
         await enviarCodigoEmail(usuario, codigo);
@@ -150,7 +119,7 @@ app.post('/api/registro', async (req, res) => {
 
         res.status(200).json({
             exito: true,
-            mensaje: 'Código de verificación enviado a tu correo',
+            mensaje: 'Código enviado a tu correo',
             requiereVerificacion: true
         });
 
@@ -160,8 +129,8 @@ app.post('/api/registro', async (req, res) => {
     }
 });
 
-// PASO 2 - Verificar código y completar registro
-app.post('/api/verificar', (req, res) => {
+// PASO 2 - Verificar código y crear cuenta
+app.post('/api/verificar', async (req, res) => {
     try {
         const { usuario, codigo } = req.body;
 
@@ -171,7 +140,7 @@ app.post('/api/verificar', (req, res) => {
         const pendiente = codigosPendientes[usuario];
 
         if (!pendiente)
-            return res.status(400).json({ exito: false, mensaje: 'No hay registro pendiente para este usuario' });
+            return res.status(400).json({ exito: false, mensaje: 'No hay registro pendiente. Vuelve a registrarte.' });
 
         if (Date.now() > pendiente.expira) {
             delete codigosPendientes[usuario];
@@ -181,9 +150,7 @@ app.post('/api/verificar', (req, res) => {
         if (pendiente.codigo !== codigo.trim())
             return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
 
-        const usuarios = leerUsuarios();
-        usuarios.push(pendiente.datosUsuario);
-        guardarUsuarios(usuarios);
+        await Usuario.create({ usuario, contrasena: pendiente.contrasenaHash });
         delete codigosPendientes[usuario];
 
         console.log(`✓ Usuario verificado y registrado: ${usuario}`);
@@ -204,26 +171,19 @@ app.post('/api/verificar', (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { usuario, contrasena } = req.body;
-
         if (!usuario || !contrasena)
             return res.status(400).json({ exito: false, mensaje: 'Datos incompletos' });
 
-        const usuarioEncontrado = buscarUsuario(usuario);
+        const usuarioEncontrado = await Usuario.findOne({ usuario });
         if (!usuarioEncontrado)
             return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
 
-        const contrasenaValida = await bcrypt.compare(contrasena, usuarioEncontrado.contrasena);
-        if (!contrasenaValida)
+        const valido = await bcrypt.compare(contrasena, usuarioEncontrado.contrasena);
+        if (!valido)
             return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
 
         console.log(`✓ Login exitoso: ${usuario}`);
-
-        res.status(200).json({
-            exito: true,
-            mensaje: 'Autenticación satisfactoria',
-            usuario,
-            fechaLogin: new Date().toISOString()
-        });
+        res.status(200).json({ exito: true, mensaje: 'Autenticación exitosa', usuario, fechaLogin: new Date().toISOString() });
 
     } catch (error) {
         console.error('Error en login:', error);
@@ -232,13 +192,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Listar usuarios
-app.get('/api/usuarios', (req, res) => {
+app.get('/api/usuarios', async (req, res) => {
     try {
-        const usuarios = leerUsuarios().map(u => ({
-            id: u.id,
-            usuario: u.usuario,
-            fechaRegistro: u.fechaRegistro
-        }));
+        const usuarios = await Usuario.find({}, { contrasena: 0 });
         res.status(200).json({ exito: true, cantidad: usuarios.length, usuarios });
     } catch (error) {
         res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
@@ -249,26 +205,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// =========================================
-// INICIO DEL SERVIDOR
-// =========================================
-app.listen(PORT, () => {
-    console.log('=========================================');
-    console.log('🚀 SERVIDOR DE AUTENTICACIÓN INICIADO');
-    console.log('=========================================');
-    console.log(`📡 Puerto: ${PORT}`);
-    console.log('Endpoints:');
-    console.log('  POST /api/registro  - Envía código al email');
-    console.log('  POST /api/verificar - Verifica código y crea cuenta');
-    console.log('  POST /api/login     - Inicio de sesión');
-    console.log('  GET  /api/usuarios  - Listar usuarios');
-    console.log('=========================================');
-});
-
-process.on('uncaughtException', (error) => {
-    console.error('Error no capturado:', error);
-});
-
-process.on('unhandledRejection', (reason) => {
-    console.error('Promise rechazada:', reason);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Servidor iniciado en puerto ${PORT}`);
 });
