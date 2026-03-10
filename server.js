@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { Resend } = require('resend');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,13 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // =========================================
-// CONFIGURACIÓN DE RESEND
-// =========================================
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// =========================================
 // ALMACÉN TEMPORAL DE CÓDIGOS
-// { email: { codigo, expira, datosUsuario } }
 // =========================================
 const codigosPendientes = {};
 
@@ -68,24 +62,52 @@ function generarCodigo() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function enviarCodigoEmail(email, codigo) {
-    const { error } = await resend.emails.send({
-        from: 'onboarding@resend.dev',   // dominio gratuito de Resend
-        to: email,
-        subject: '🔐 Código de verificación',
-        html: `
-            <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:10px;">
-                <h2 style="color:#667eea;">Confirma tu registro</h2>
-                <p>Usa este código para completar tu registro:</p>
-                <div style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#764ba2;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;margin:20px 0;">
-                    ${codigo}
+// Envía email usando la API HTTP de Brevo (sin SMTP)
+function enviarCodigoEmail(email, codigo) {
+    return new Promise((resolve, reject) => {
+        const body = JSON.stringify({
+            sender: { name: 'Sistema de Autenticación', email: 'af8791052@gmail.com' },
+            to: [{ email }],
+            subject: '🔐 Código de verificación',
+            htmlContent: `
+                <div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;border:1px solid #e0e0e0;border-radius:10px;">
+                    <h2 style="color:#667eea;">Confirma tu registro</h2>
+                    <p>Usa este código para completar tu registro:</p>
+                    <div style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#764ba2;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;margin:20px 0;">
+                        ${codigo}
+                    </div>
+                    <p style="color:#999;font-size:12px;">Este código expira en 10 minutos.</p>
                 </div>
-                <p style="color:#999;font-size:12px;">Este código expira en 10 minutos.</p>
-            </div>
-        `
-    });
+            `
+        });
 
-    if (error) throw new Error(error.message);
+        const options = {
+            hostname: 'api.brevo.com',
+            path: '/v3/smtp/email',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'Content-Length': Buffer.byteLength(body)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    resolve(data);
+                } else {
+                    reject(new Error(`Brevo error ${res.statusCode}: ${data}`));
+                }
+            });
+        });
+
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
 }
 
 // =========================================
