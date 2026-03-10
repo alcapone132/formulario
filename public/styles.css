@@ -292,3 +292,108 @@ input:invalid:not(:placeholder-shown) {
 input:valid:not(:placeholder-shown) {
     border-color: #d4edda;
 }
+
+/* =========================================
+   MODAL DE VERIFICACIÓN
+   ========================================= */
+#modal-verificacion {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-box {
+    background: white;
+    border-radius: 20px;
+    padding: 40px 32px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+.modal-box h2 {
+    color: #333;
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.modal-box p {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 28px;
+    line-height: 1.6;
+}
+
+.modal-box p strong {
+    color: #667eea;
+    word-break: break-all;
+}
+
+.codigo-inputs {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.codigo-digito {
+    width: 50px;
+    height: 58px;
+    text-align: center;
+    font-size: 26px;
+    font-weight: bold;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+    color: #333;
+}
+
+.codigo-digito:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.codigo-digito:not(:placeholder-shown) {
+    border-color: #764ba2;
+    background: #faf8ff;
+}
+
+.btn-reenviar {
+    background: none;
+    border: none;
+    color: #667eea;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 14px;
+    display: block;
+    width: 100%;
+    text-decoration: underline;
+    font-family: inherit;
+    transition: color 0.2s;
+}
+
+.btn-reenviar:hover { color: #764ba2; }
+.btn-reenviar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@keyframes slideUp {
+    from { transform: translateY(24px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+@media (max-width: 480px) {
+    .codigo-digito {
+        width: 42px;
+        height: 50px;
+        font-size: 22px;
+    }
+    .codigo-inputs { gap: 7px; }
+}
