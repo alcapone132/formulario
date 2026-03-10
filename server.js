@@ -17,9 +17,9 @@ const PORT = process.env.PORT || 3000;
 // =========================================
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    family: 4,              // ← fuerza IPv4, soluciona error en Render
-    secure: false,
+    port: 465,
+    family: 4,
+    secure: true,
     auth: {
         user: process.env.EMAIL_USER,   // tu-correo@gmail.com
         pass: process.env.EMAIL_PASS    // contraseña de aplicación de Google
