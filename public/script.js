@@ -1,277 +1,207 @@
 // =========================================
 // LÓGICA DEL CLIENTE - SISTEMA DE AUTENTICACIÓN
 // =========================================
-
-// Configuración de la URL base de la API
 const API_URL = '/api';
 
-// =========================================
-// FUNCIONES DE NAVEGACIÓN DE PESTAÑAS
-// =========================================
-
-/**
- * Función para cambiar entre pestañas (Registro / Login)
- * @param {string} tabName - Nombre de la pestaña ('registro' o 'login')
- */
-function mostrarTab(tabName) {
-    // Obtiene todos los contenidos de pestañas
-    const tabs = document.querySelectorAll('.tab-content');
-    // Obtiene todos los botones de pestañas
-    const buttons = document.querySelectorAll('.tab-button');
-    
-    // Oculta todos los contenidos de pestañas
-    tabs.forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Desactiva todos los botones de pestañas
-    buttons.forEach(button => {
-        button.classList.remove('active');
-    });
-    
-    // Muestra la pestaña seleccionada
+function mostrarTab(tabName, e) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
     document.getElementById(`${tabName}-tab`).classList.add('active');
-    
-    // Activa el botón correspondiente
-    event.target.classList.add('active');
-    
-    // Limpia los mensajes al cambiar de pestaña
+    if (e && e.target) e.target.classList.add('active');
     limpiarMensajes();
 }
 
-// =========================================
-// FUNCIONES DE MENSAJES
-// =========================================
-
-/**
- * Muestra un mensaje en el área de mensajes especificada
- * @param {string} elementId - ID del elemento donde mostrar el mensaje
- * @param {string} mensaje - Texto del mensaje a mostrar
- * @param {string} tipo - Tipo de mensaje ('exito' o 'error')
- */
 function mostrarMensaje(elementId, mensaje, tipo) {
-    const mensajeDiv = document.getElementById(elementId);
-    
-    // Establece el contenido del mensaje
-    mensajeDiv.textContent = mensaje;
-    
-    // Remueve clases anteriores
-    mensajeDiv.classList.remove('exito', 'error', 'show');
-    
-    // Agrega las nuevas clases
-    mensajeDiv.classList.add(tipo, 'show');
-    
-    // Auto-ocultar el mensaje después de 5 segundos
-    setTimeout(() => {
-        mensajeDiv.classList.remove('show');
-    }, 5000);
+    const div = document.getElementById(elementId);
+    div.textContent = mensaje;
+    div.classList.remove('exito', 'error', 'show');
+    div.classList.add(tipo, 'show');
+    setTimeout(() => div.classList.remove('show'), 6000);
 }
 
-/**
- * Limpia todos los mensajes de la página
- */
 function limpiarMensajes() {
-    const mensajes = document.querySelectorAll('.mensaje');
-    mensajes.forEach(mensaje => {
-        mensaje.classList.remove('show');
+    document.querySelectorAll('.mensaje').forEach(m => m.classList.remove('show'));
+}
+
+// =========================================
+// MODAL DE VERIFICACIÓN
+// =========================================
+function mostrarModal(email) {
+    window._usuarioPendiente = email;
+    document.getElementById('modal-email').textContent = email;
+    document.querySelectorAll('.codigo-digito').forEach(d => d.value = '');
+    document.getElementById('modal-mensaje').classList.remove('show');
+    document.getElementById('modal-verificacion').style.display = 'flex';
+    setTimeout(() => document.querySelectorAll('.codigo-digito')[0].focus(), 100);
+}
+
+function ocultarModal() {
+    document.getElementById('modal-verificacion').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const digitos = document.querySelectorAll('.codigo-digito');
+
+    digitos.forEach((input, i) => {
+        input.addEventListener('input', () => {
+            input.value = input.value.replace(/[^0-9]/g, '');
+            if (input.value && i < digitos.length - 1) digitos[i + 1].focus();
+            if (Array.from(digitos).every(d => d.value)) verificarCodigo();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !input.value && i > 0) digitos[i - 1].focus();
+        });
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const texto = e.clipboardData.getData('text').replace(/[^0-9]/g, '');
+            digitos.forEach((d, j) => { if (texto[j]) d.value = texto[j]; });
+            digitos[Math.min(texto.length, digitos.length - 1)].focus();
+            if (texto.length >= 6) verificarCodigo();
+        });
     });
-}
 
-/**
- * Limpia un formulario específico
- * @param {HTMLFormElement} form - El formulario a limpiar
- */
-function limpiarFormulario(form) {
-    form.reset();
-}
+    document.getElementById('btn-verificar').addEventListener('click', verificarCodigo);
 
-// =========================================
-// MANEJO DEL FORMULARIO DE REGISTRO
-// =========================================
+    document.getElementById('btn-reenviar').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-reenviar');
+        btn.textContent = 'Enviando...';
+        btn.disabled = true;
+        mostrarMensaje('modal-mensaje', 'Código reenviado a tu correo ✓', 'exito');
+        setTimeout(() => {
+            btn.textContent = '¿No llegó? Reenviar código';
+            btn.disabled = false;
+        }, 4000);
+    });
 
-/**
- * Event listener para el formulario de registro
- */
-document.getElementById('registro-form').addEventListener('submit', async function(e) {
-    // Previene el comportamiento por defecto del formulario
-    e.preventDefault();
-    
-    // Obtiene los valores de los campos
-    const usuario = document.getElementById('registro-usuario').value.trim();
-    const contrasena = document.getElementById('registro-contrasena').value;
-    const confirmar = document.getElementById('registro-confirmar').value;
-    
-    // Validación: Verifica que las contraseñas coincidan
-    if (contrasena !== confirmar) {
-        mostrarMensaje('registro-mensaje', 'Las contraseñas no coinciden', 'error');
-        return;
-    }
-    
-    // Validación: Longitud mínima del usuario
-    if (usuario.length < 3) {
-        mostrarMensaje('registro-mensaje', 'El usuario debe tener al menos 3 caracteres', 'error');
-        return;
-    }
-    
-    // Validación: Longitud mínima de la contraseña
-    if (contrasena.length < 6) {
-        mostrarMensaje('registro-mensaje', 'La contraseña debe tener al menos 6 caracteres', 'error');
-        return;
-    }
-    
-    // Deshabilita el botón mientras se procesa
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Registrando...';
-    
-    try {
-        // Realiza la petición POST al endpoint de registro
-        const response = await fetch(`${API_URL}/registro`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                usuario: usuario,
-                contrasena: contrasena
-            })
-        });
-        
-        // Parsea la respuesta JSON
-        const data = await response.json();
-        
-        // Verifica si el registro fue exitoso
-        if (data.exito) {
-            // Muestra mensaje de éxito
-            mostrarMensaje('registro-mensaje', data.mensaje, 'exito');
-            
-            // Limpia el formulario
-            limpiarFormulario(e.target);
-            
-            // Opcional: Cambia automáticamente a la pestaña de login después de 2 segundos
-            setTimeout(() => {
-                document.querySelectorAll('.tab-button')[1].click();
-            }, 2000);
-            
-        } else {
-            // Muestra mensaje de error
-            mostrarMensaje('registro-mensaje', data.mensaje, 'error');
-        }
-        
-    } catch (error) {
-        // Manejo de errores de red o servidor
-        console.error('Error:', error);
-        mostrarMensaje('registro-mensaje', 
-            'Error de conexión. Por favor, verifica que el servidor esté funcionando.', 
-            'error');
-    } finally {
-        // Re-habilita el botón
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Registrarse';
-    }
-});
-
-// =========================================
-// MANEJO DEL FORMULARIO DE INICIO DE SESIÓN
-// =========================================
-
-/**
- * Event listener para el formulario de login
- */
-document.getElementById('login-form').addEventListener('submit', async function(e) {
-    // Previene el comportamiento por defecto del formulario
-    e.preventDefault();
-    
-    // Obtiene los valores de los campos
-    const usuario = document.getElementById('login-usuario').value.trim();
-    const contrasena = document.getElementById('login-contrasena').value;
-    
-    // Validación: Verifica que los campos no estén vacíos
-    if (!usuario || !contrasena) {
-        mostrarMensaje('login-mensaje', 'Por favor, completa todos los campos', 'error');
-        return;
-    }
-    
-    // Deshabilita el botón mientras se procesa
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Iniciando sesión...';
-    
-    try {
-        // Realiza la petición POST al endpoint de login
-        const response = await fetch(`${API_URL}/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                usuario: usuario,
-                contrasena: contrasena
-            })
-        });
-        
-        // Parsea la respuesta JSON
-        const data = await response.json();
-        
-        // Verifica si la autenticación fue exitosa
-        if (data.exito) {
-            // Muestra mensaje de éxito
-            mostrarMensaje('login-mensaje', 
-                `${data.mensaje}! Bienvenido/a ${data.usuario}`, 
-                'exito');
-            
-            // Limpia el formulario
-            limpiarFormulario(e.target);
-            
-            // Aquí puedes agregar lógica adicional después del login exitoso
-            // Por ejemplo: redirigir a otra página, guardar token, etc.
-            console.log('Usuario autenticado:', data.usuario);
-            console.log('Fecha de login:', data.fechaLogin);
-            
-        } else {
-            // Muestra mensaje de error
-            mostrarMensaje('login-mensaje', data.mensaje, 'error');
-        }
-        
-    } catch (error) {
-        // Manejo de errores de red o servidor
-        console.error('Error:', error);
-        mostrarMensaje('login-mensaje', 
-            'Error de conexión. Por favor, verifica que el servidor esté funcionando.', 
-            'error');
-    } finally {
-        // Re-habilita el botón
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Iniciar Sesión';
-    }
-});
-
-// =========================================
-// INICIALIZACIÓN
-// =========================================
-
-/**
- * Código que se ejecuta cuando la página termina de cargar
- */
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Sistema de autenticación cargado correctamente');
-    console.log('API URL:', API_URL);
-    
-    // Opcional: Verificar conexión con el servidor
     verificarConexion();
 });
 
-/**
- * Verifica si el servidor está disponible
- */
-async function verificarConexion() {
+async function verificarCodigo() {
+    const digitos = document.querySelectorAll('.codigo-digito');
+    const codigo = Array.from(digitos).map(d => d.value).join('');
+
+    if (codigo.length < 6) {
+        mostrarMensaje('modal-mensaje', 'Ingresa los 6 dígitos del código', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btn-verificar');
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
+
     try {
-        const response = await fetch(`${API_URL}/usuarios`);
-        if (response.ok) {
-            console.log('✓ Conexión con el servidor establecida');
+        const response = await fetch(`${API_URL}/verificar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario: window._usuarioPendiente, codigo })
+        });
+
+        const data = await response.json();
+
+        if (data.exito) {
+            ocultarModal();
+            mostrarMensaje('registro-mensaje', '✓ Registro completado. Ya puedes iniciar sesión.', 'exito');
+            setTimeout(() => document.querySelectorAll('.tab-button')[1].click(), 2000);
+        } else {
+            mostrarMensaje('modal-mensaje', data.mensaje, 'error');
+            digitos.forEach(d => d.value = '');
+            digitos[0].focus();
+            btn.disabled = false;
+            btn.textContent = 'Verificar';
         }
     } catch (error) {
-        console.warn('⚠ No se pudo conectar con el servidor');
-        console.warn('Asegúrate de que el servidor esté ejecutándose en el puerto 3000');
+        mostrarMensaje('modal-mensaje', 'Error de conexión. Intenta de nuevo.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Verificar';
+    }
+}
+
+// =========================================
+// REGISTRO
+// =========================================
+document.getElementById('registro-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const usuario = document.getElementById('registro-usuario').value.trim();
+    const contrasena = document.getElementById('registro-contrasena').value;
+    const confirmar = document.getElementById('registro-confirmar').value;
+
+    if (contrasena !== confirmar) return mostrarMensaje('registro-mensaje', 'Las contraseñas no coinciden', 'error');
+    if (contrasena.length < 6) return mostrarMensaje('registro-mensaje', 'La contraseña debe tener al menos 6 caracteres', 'error');
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Enviando código...';
+
+    try {
+        const response = await fetch(`${API_URL}/registro`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, contrasena })
+        });
+        const data = await response.json();
+
+        if (data.exito && data.requiereVerificacion) {
+            e.target.reset();
+            mostrarModal(usuario);
+        } else if (data.exito) {
+            mostrarMensaje('registro-mensaje', data.mensaje, 'exito');
+            e.target.reset();
+        } else {
+            mostrarMensaje('registro-mensaje', data.mensaje, 'error');
+        }
+    } catch {
+        mostrarMensaje('registro-mensaje', 'Error de conexión.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Registrarse';
+    }
+});
+
+// =========================================
+// LOGIN
+// =========================================
+document.getElementById('login-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const usuario = document.getElementById('login-usuario').value.trim();
+    const contrasena = document.getElementById('login-contrasena').value;
+
+    if (!usuario || !contrasena) return mostrarMensaje('login-mensaje', 'Por favor, completa todos los campos', 'error');
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Iniciando sesión...';
+
+    try {
+        const response = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, contrasena })
+        });
+        const data = await response.json();
+
+        if (data.exito) {
+            mostrarMensaje('login-mensaje', `Bienvenido/a ${data.usuario} ✓`, 'exito');
+            e.target.reset();
+            sessionStorage.setItem('sesion', JSON.stringify({ usuario: data.usuario, fechaLogin: data.fechaLogin }));
+            setTimeout(() => { window.location.href = '/dashboard.html'; }, 1000);
+        } else {
+            mostrarMensaje('login-mensaje', data.mensaje, 'error');
+        }
+    } catch {
+        mostrarMensaje('login-mensaje', 'Error de conexión.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Iniciar Sesión';
+    }
+});
+
+async function verificarConexion() {
+    try {
+        const r = await fetch(`${API_URL}/usuarios`);
+        if (r.ok) console.log('✓ Conexión establecida');
+    } catch {
+        console.warn('⚠ Sin conexión con el servidor');
     }
 }
