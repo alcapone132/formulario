@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,18 +13,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // =========================================
-// CONFIGURACIÓN DE NODEMAILER (Gmail + IPv4)
+// CONFIGURACIÓN DE RESEND
 // =========================================
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    family: 4,
-    secure: true,
-    auth: {
-        user: process.env.EMAIL_USER,   // tu-correo@gmail.com
-        pass: process.env.EMAIL_PASS    // contraseña de aplicación de Google
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // =========================================
 // ALMACÉN TEMPORAL DE CÓDIGOS
@@ -73,16 +64,13 @@ function buscarUsuario(usuario) {
 // =========================================
 // HELPERS
 // =========================================
-
-// Genera código de 6 dígitos
 function generarCodigo() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Envía el email con el código
 async function enviarCodigoEmail(email, codigo) {
-    await transporter.sendMail({
-        from: `"Sistema de Autenticación" <${process.env.EMAIL_USER}>`,
+    const { error } = await resend.emails.send({
+        from: 'onboarding@resend.dev',   // dominio gratuito de Resend
         to: email,
         subject: '🔐 Código de verificación',
         html: `
@@ -96,17 +84,15 @@ async function enviarCodigoEmail(email, codigo) {
             </div>
         `
     });
+
+    if (error) throw new Error(error.message);
 }
 
 // =========================================
 // ENDPOINTS
 // =========================================
 
-/**
- * PASO 1 - Registro: recibe datos y envía código al email
- * POST /api/registro
- * Body: { usuario, contrasena }
- */
+// PASO 1 - Registro: envía código al email
 app.post('/api/registro', async (req, res) => {
     try {
         const { usuario, contrasena } = req.body;
@@ -123,13 +109,12 @@ app.post('/api/registro', async (req, res) => {
         if (buscarUsuario(usuario))
             return res.status(409).json({ exito: false, mensaje: 'El usuario ya existe' });
 
-        // Genera y guarda el código temporalmente
         const codigo = generarCodigo();
         const contrasenaHash = await bcrypt.hash(contrasena, 10);
 
         codigosPendientes[usuario] = {
             codigo,
-            expira: Date.now() + 10 * 60 * 1000, // 10 minutos
+            expira: Date.now() + 10 * 60 * 1000,
             datosUsuario: {
                 id: Date.now(),
                 usuario,
@@ -138,9 +123,7 @@ app.post('/api/registro', async (req, res) => {
             }
         };
 
-        // Envía el código al email
         await enviarCodigoEmail(usuario, codigo);
-
         console.log(`✓ Código enviado a: ${usuario}`);
 
         res.status(200).json({
@@ -151,15 +134,11 @@ app.post('/api/registro', async (req, res) => {
 
     } catch (error) {
         console.error('Error en registro:', error);
-        res.status(500).json({ exito: false, mensaje: 'Error al enviar el código. Verifica que el correo sea válido.' });
+        res.status(500).json({ exito: false, mensaje: 'Error al enviar el código: ' + error.message });
     }
 });
 
-/**
- * PASO 2 - Verificar código y completar registro
- * POST /api/verificar
- * Body: { usuario, codigo }
- */
+// PASO 2 - Verificar código y completar registro
 app.post('/api/verificar', (req, res) => {
     try {
         const { usuario, codigo } = req.body;
@@ -180,7 +159,6 @@ app.post('/api/verificar', (req, res) => {
         if (pendiente.codigo !== codigo.trim())
             return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
 
-        // Código correcto → guarda el usuario
         const usuarios = leerUsuarios();
         usuarios.push(pendiente.datosUsuario);
         guardarUsuarios(usuarios);
@@ -200,10 +178,7 @@ app.post('/api/verificar', (req, res) => {
     }
 });
 
-/**
- * Login
- * POST /api/login
- */
+// Login
 app.post('/api/login', async (req, res) => {
     try {
         const { usuario, contrasena } = req.body;
@@ -234,10 +209,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-/**
- * Listar usuarios (sin contraseñas)
- * GET /api/usuarios
- */
+// Listar usuarios
 app.get('/api/usuarios', (req, res) => {
     try {
         const usuarios = leerUsuarios().map(u => ({
@@ -255,47 +227,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-/**
- * ENDPOINT DE PRUEBA - verifica configuración del email
- * GET /api/test-email
- * Eliminar en producción
- */
-app.get('/api/test-email', async (req, res) => {
-    try {
-        // Verifica que las variables de entorno existen
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            return res.status(500).json({
-                exito: false,
-                mensaje: 'Variables EMAIL_USER o EMAIL_PASS no configuradas en Render'
-            });
-        }
-
-        // Verifica la conexión SMTP
-        await transporter.verify();
-
-        // Envía un email de prueba al mismo remitente
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: process.env.EMAIL_USER,
-            subject: '✅ Test de conexión exitoso',
-            text: 'El servidor de email está funcionando correctamente.'
-        });
-
-        res.json({
-            exito: true,
-            mensaje: `Email de prueba enviado a ${process.env.EMAIL_USER}`,
-            emailUser: process.env.EMAIL_USER
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            exito: false,
-            mensaje: 'Error de conexión SMTP',
-            error: error.message
-        });
-    }
-});
-
 // =========================================
 // INICIO DEL SERVIDOR
 // =========================================
@@ -304,10 +235,7 @@ app.listen(PORT, () => {
     console.log('🚀 SERVIDOR DE AUTENTICACIÓN INICIADO');
     console.log('=========================================');
     console.log(`📡 Puerto: ${PORT}`);
-    console.log(`🌐 URL: http://localhost:${PORT}`);
-    console.log(`📁 Base de datos: ${DB_PATH}`);
-    console.log('=========================================');
-    console.log('Endpoints disponibles:');
+    console.log('Endpoints:');
     console.log('  POST /api/registro  - Envía código al email');
     console.log('  POST /api/verificar - Verifica código y crea cuenta');
     console.log('  POST /api/login     - Inicio de sesión');
