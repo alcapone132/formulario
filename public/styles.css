@@ -242,3 +242,22 @@ input:valid:not(:placeholder-shown)   { border-color: #d4edda; }
     .codigo-digito { width: 42px; height: 50px; font-size: 22px; }
     .codigo-inputs { gap: 7px; }
 }
+
+/* =========================================
+   BOTÓN CERRAR MODAL
+   ========================================= */
+.modal-box { position: relative; }
+
+.modal-cerrar {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #aaa;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+.modal-cerrar:hover { color: #333; }
