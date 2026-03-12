@@ -39,9 +39,13 @@ function ocultarModal() {
     document.getElementById('modal-verificacion').style.display = 'none';
 }
 
+// =========================================
+// DOM CONTENT LOADED — único, centralizado
+// =========================================
 document.addEventListener('DOMContentLoaded', function () {
-    const digitos = document.querySelectorAll('.codigo-digito');
 
+    // — Dígitos modal de REGISTRO —
+    const digitos = document.querySelectorAll('#modal-verificacion .codigo-digito');
     digitos.forEach((input, i) => {
         input.addEventListener('input', () => {
             input.value = input.value.replace(/[^0-9]/g, '');
@@ -73,11 +77,31 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 4000);
     });
 
+    // — Dígitos modal de RECUPERACIÓN —
+    const digitosRec = document.querySelectorAll('#recuperar-digitos .codigo-digito');
+    digitosRec.forEach((input, i) => {
+        input.addEventListener('input', () => {
+            input.value = input.value.replace(/[^0-9]/g, '');
+            if (input.value && i < digitosRec.length - 1) digitosRec[i + 1].focus();
+            if (Array.from(digitosRec).every(d => d.value)) verificarCodigoRecuperacion();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !input.value && i > 0) digitosRec[i - 1].focus();
+        });
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const texto = e.clipboardData.getData('text').replace(/[^0-9]/g, '');
+            digitosRec.forEach((d, j) => { if (texto[j]) d.value = texto[j]; });
+            digitosRec[Math.min(texto.length, digitosRec.length - 1)].focus();
+            if (texto.length >= 6) verificarCodigoRecuperacion();
+        });
+    });
+
     verificarConexion();
 });
 
 async function verificarCodigo() {
-    const digitos = document.querySelectorAll('.codigo-digito');
+    const digitos = document.querySelectorAll('#modal-verificacion .codigo-digito');
     const codigo = Array.from(digitos).map(d => d.value).join('');
 
     if (codigo.length < 6) {
@@ -206,7 +230,6 @@ async function verificarConexion() {
     }
 }
 
-
 // =========================================
 // RECUPERAR CONTRASEÑA
 // =========================================
@@ -221,28 +244,6 @@ function abrirRecuperar() {
 function cerrarRecuperar(id) {
     document.getElementById(id).style.display = 'none';
 }
-
-document.addEventListener('DOMContentLoaded', function () {
-    // Dígitos del modal de recuperación
-    const digitosRec = document.querySelectorAll('#recuperar-digitos .codigo-digito');
-    digitosRec.forEach((input, i) => {
-        input.addEventListener('input', () => {
-            input.value = input.value.replace(/[^0-9]/g, '');
-            if (input.value && i < digitosRec.length - 1) digitosRec[i + 1].focus();
-            if (Array.from(digitosRec).every(d => d.value)) verificarCodigoRecuperacion();
-        });
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace' && !input.value && i > 0) digitosRec[i - 1].focus();
-        });
-        input.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const texto = e.clipboardData.getData('text').replace(/[^0-9]/g, '');
-            digitosRec.forEach((d, j) => { if (texto[j]) d.value = texto[j]; });
-            digitosRec[Math.min(texto.length, digitosRec.length - 1)].focus();
-            if (texto.length >= 6) verificarCodigoRecuperacion();
-        });
-    });
-});
 
 async function enviarCodigoRecuperacion() {
     const email = document.getElementById('recuperar-email-input').value.trim();
