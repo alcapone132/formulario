@@ -208,6 +208,36 @@ input:valid:not(:placeholder-shown)   { border-color: #d4edda; }
     to   { transform: translateY(0);    opacity: 1; }
 }
 
+/* =========================================
+   RECUPERAR CONTRASEÑA
+   ========================================= */
+
+.link-recuperar {
+    display: block;
+    text-align: right;
+    font-size: 13px;
+    color: #667eea;
+    cursor: pointer;
+    margin-top: -10px;
+    margin-bottom: 18px;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.link-recuperar:hover { color: #764ba2; text-decoration: underline; }
+
+#modal-recuperar-email,
+#modal-recuperar-codigo,
+#modal-recuperar-nueva {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
 @media (max-width: 480px) {
     .codigo-digito { width: 42px; height: 50px; font-size: 22px; }
     .codigo-inputs { gap: 7px; }
