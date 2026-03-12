@@ -61,7 +61,6 @@
                 <a class="link-recuperar" onclick="abrirRecuperar()">¿Olvidaste tu contraseña?</a>
                 <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
             </form>
-            
             <div id="login-mensaje" class="mensaje"></div>
         </div>
 
@@ -74,6 +73,7 @@
     <div id="modal-verificacion" style="display:none;">
         <div class="modal-overlay">
             <div class="modal-box">
+                <button class="modal-cerrar" onclick="ocultarModal()">✕</button>
                 <h2>📧 Verifica tu correo</h2>
                 <p>Ingresa el código de 6 dígitos enviado a<br><strong id="modal-email"></strong></p>
                 <div class="codigo-inputs">
@@ -90,62 +90,66 @@
             </div>
         </div>
     </div>
+
     <!-- MODAL PASO 1 — Ingresar email -->
-<div id="modal-recuperar-email" style="display:none;">
-    <div class="modal-overlay">
-        <div class="modal-box">
-            <h2>🔑 Recuperar contraseña</h2>
-            <p>Ingresa tu correo registrado y te enviaremos un código.</p>
-            <div class="form-group">
-                <label for="recuperar-email-input">Correo electrónico</label>
-                <input type="email" id="recuperar-email-input" placeholder="tu@correo.com">
+    <div id="modal-recuperar-email" style="display:none;">
+        <div class="modal-overlay">
+            <div class="modal-box">
+                <button class="modal-cerrar" onclick="cerrarRecuperar('modal-recuperar-email')">✕</button>
+                <h2>🔑 Recuperar contraseña</h2>
+                <p>Ingresa tu correo registrado y te enviaremos un código.</p>
+                <div class="form-group">
+                    <label for="recuperar-email-input">Correo electrónico</label>
+                    <input type="email" id="recuperar-email-input" placeholder="tu@correo.com">
+                </div>
+                <div id="recuperar-email-mensaje" class="mensaje"></div>
+                <button class="btn btn-primary" onclick="enviarCodigoRecuperacion()">Enviar código</button>
             </div>
-            <div id="recuperar-email-mensaje" class="mensaje"></div>
-            <button class="btn btn-primary" onclick="enviarCodigoRecuperacion()">Enviar código</button>
         </div>
     </div>
-</div>
 
-<!-- MODAL PASO 2 — Verificar código -->
-<div id="modal-recuperar-codigo" style="display:none;">
-    <div class="modal-overlay">
-        <div class="modal-box">
-            <h2>📨 Código de verificación</h2>
-            <p>Ingresa el código de 6 dígitos enviado a<br><strong id="recuperar-codigo-email"></strong></p>
-            <div class="codigo-inputs" id="recuperar-digitos">
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
-                <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+    <!-- MODAL PASO 2 — Verificar código -->
+    <div id="modal-recuperar-codigo" style="display:none;">
+        <div class="modal-overlay">
+            <div class="modal-box">
+                <button class="modal-cerrar" onclick="cerrarRecuperar('modal-recuperar-codigo')">✕</button>
+                <h2>📨 Código de verificación</h2>
+                <p>Ingresa el código de 6 dígitos enviado a<br><strong id="recuperar-codigo-email"></strong></p>
+                <div class="codigo-inputs" id="recuperar-digitos">
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                    <input type="text" class="codigo-digito" maxlength="1" inputmode="numeric" />
+                </div>
+                <div id="recuperar-codigo-mensaje" class="mensaje"></div>
+                <button class="btn btn-primary" onclick="verificarCodigoRecuperacion()">Verificar código</button>
+                <button class="btn-reenviar" onclick="reenviarCodigoRecuperacion()">¿No llegó? Reenviar código</button>
             </div>
-            <div id="recuperar-codigo-mensaje" class="mensaje"></div>
-            <button class="btn btn-primary" onclick="verificarCodigoRecuperacion()">Verificar código</button>
-            <button class="btn-reenviar" onclick="reenviarCodigoRecuperacion()">¿No llegó? Reenviar código</button>
         </div>
     </div>
-</div>
 
-<!-- MODAL PASO 3 — Nueva contraseña -->
-<div id="modal-recuperar-nueva" style="display:none;">
-    <div class="modal-overlay">
-        <div class="modal-box">
-            <h2>🔒 Nueva contraseña</h2>
-            <p>Crea una nueva contraseña para tu cuenta.</p>
-            <div class="form-group">
-                <label for="nueva-contrasena">Nueva contraseña</label>
-                <input type="password" id="nueva-contrasena" placeholder="Mínimo 6 caracteres" minlength="6">
+    <!-- MODAL PASO 3 — Nueva contraseña -->
+    <div id="modal-recuperar-nueva" style="display:none;">
+        <div class="modal-overlay">
+            <div class="modal-box">
+                <button class="modal-cerrar" onclick="cerrarRecuperar('modal-recuperar-nueva')">✕</button>
+                <h2>🔒 Nueva contraseña</h2>
+                <p>Crea una nueva contraseña para tu cuenta.</p>
+                <div class="form-group">
+                    <label for="nueva-contrasena">Nueva contraseña</label>
+                    <input type="password" id="nueva-contrasena" placeholder="Mínimo 6 caracteres" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="nueva-contrasena-confirmar">Confirmar contraseña</label>
+                    <input type="password" id="nueva-contrasena-confirmar" placeholder="Repite la contraseña" minlength="6">
+                </div>
+                <div id="recuperar-nueva-mensaje" class="mensaje"></div>
+                <button class="btn btn-primary" onclick="guardarNuevaContrasena()">Guardar contraseña</button>
             </div>
-            <div class="form-group">
-                <label for="nueva-contrasena-confirmar">Confirmar contraseña</label>
-                <input type="password" id="nueva-contrasena-confirmar" placeholder="Repite la contraseña" minlength="6">
-            </div>
-            <div id="recuperar-nueva-mensaje" class="mensaje"></div>
-            <button class="btn btn-primary" onclick="guardarNuevaContrasena()">Guardar contraseña</button>
         </div>
     </div>
-</div>
 
     <script src="script.js"></script>
 </body>
