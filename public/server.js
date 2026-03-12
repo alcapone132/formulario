@@ -201,6 +201,95 @@ app.get('/api/usuarios', async (req, res) => {
     }
 });
 
+// =========================================
+// RECUPERAR CONTRASEÑA
+// =========================================
+
+// PASO 1 - Enviar código de recuperación
+app.post('/api/recuperar', async (req, res) => {
+    try {
+        const { usuario } = req.body;
+
+        if (!usuario)
+            return res.status(400).json({ exito: false, mensaje: 'El correo es requerido' });
+
+        const existe = await Usuario.findOne({ usuario });
+        if (!existe)
+            return res.status(404).json({ exito: false, mensaje: 'No existe una cuenta con ese correo' });
+
+        const codigo = generarCodigo();
+        codigosPendientes[`recuperar_${usuario}`] = {
+            codigo,
+            expira: Date.now() + 10 * 60 * 1000
+        };
+
+        await enviarCodigoEmail(usuario, codigo);
+        console.log(`✓ Código de recuperación enviado a: ${usuario}`);
+
+        res.status(200).json({ exito: true, mensaje: 'Código enviado a tu correo' });
+
+    } catch (error) {
+        console.error('Error en recuperar:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error al enviar el código: ' + error.message });
+    }
+});
+
+// PASO 2 - Verificar código de recuperación
+app.post('/api/verificar-recuperacion', async (req, res) => {
+    try {
+        const { usuario, codigo } = req.body;
+
+        if (!usuario || !codigo)
+            return res.status(400).json({ exito: false, mensaje: 'Datos incompletos' });
+
+        const pendiente = codigosPendientes[`recuperar_${usuario}`];
+
+        if (!pendiente)
+            return res.status(400).json({ exito: false, mensaje: 'No hay solicitud pendiente. Vuelve a intentarlo.' });
+
+        if (Date.now() > pendiente.expira) {
+            delete codigosPendientes[`recuperar_${usuario}`];
+            return res.status(400).json({ exito: false, mensaje: 'El código expiró. Solicita uno nuevo.' });
+        }
+
+        if (pendiente.codigo !== codigo.trim())
+            return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
+
+        res.status(200).json({ exito: true, mensaje: 'Código verificado' });
+
+    } catch (error) {
+        console.error('Error en verificar-recuperacion:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
+    }
+});
+
+// PASO 3 - Guardar nueva contraseña
+app.post('/api/nueva-contrasena', async (req, res) => {
+    try {
+        const { usuario, contrasena } = req.body;
+
+        if (!usuario || !contrasena)
+            return res.status(400).json({ exito: false, mensaje: 'Datos incompletos' });
+        if (contrasena.length < 6)
+            return res.status(400).json({ exito: false, mensaje: 'La contraseña debe tener al menos 6 caracteres' });
+
+        const pendiente = codigosPendientes[`recuperar_${usuario}`];
+        if (!pendiente)
+            return res.status(400).json({ exito: false, mensaje: 'Sesión expirada. Vuelve a iniciar el proceso.' });
+
+        const contrasenaHash = await bcrypt.hash(contrasena, 10);
+        await Usuario.updateOne({ usuario }, { contrasena: contrasenaHash });
+        delete codigosPendientes[`recuperar_${usuario}`];
+
+        console.log(`✓ Contraseña actualizada: ${usuario}`);
+        res.status(200).json({ exito: true, mensaje: 'Contraseña actualizada correctamente' });
+
+    } catch (error) {
+        console.error('Error en nueva-contrasena:', error);
+        res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
+    }
+});
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
