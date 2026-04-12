@@ -292,3 +292,25 @@ input:invalid:not(:placeholder-shown) {
 input:valid:not(:placeholder-shown) {
     border-color: #d4edda;
 }
+
+/* estilos de inicio google */
+.separador {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0;
+    color: #888;
+    font-size: 0.85rem;
+}
+.separador::before,
+.separador::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #ddd;
+}
+#google-btn-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
