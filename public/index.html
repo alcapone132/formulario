@@ -86,6 +86,35 @@
         </div>
 
         <!-- ===================================== -->
+        <!-- regsitro con google -->
+        <!-- ===================================== -->
+
+        <!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+        <!-- Google Identity Services -->
+<!-- Separador -->
+<div class="separador">
+    <span>o continúa con</span>
+</div>
+
+<!-- Botón de Google -->
+<div id="g_id_onload"
+     data-client_id="TU_CLIENT_ID_AQUI"
+     data-callback="handleGoogleLogin"
+     data-auto_prompt="false">
+</div>
+
+<div class="g_id_signin"
+     data-type="standard"
+     data-size="large"
+     data-theme="outline"
+     data-text="signin_with"
+     data-shape="rectangular"
+     data-locale="es"
+     data-width="100%">
+</div>
+
+        <!-- ===================================== -->
         <!-- FORMULARIO DE INICIO DE SESIÓN -->
         <!-- ===================================== -->
         <div id="login-tab" class="tab-content">
