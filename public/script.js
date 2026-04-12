@@ -281,3 +281,33 @@ async function verificarConexion() {
         console.warn('Asegúrate de que el servidor esté ejecutándose en el puerto 3000');
     }
 }
+
+
+// Función que Google llama automáticamente al iniciar sesión
+function manejarRespuestaGoogle(response) {
+    // response.credential es un JWT con los datos del usuario
+    const datos = parsearJWT(response.credential);
+    
+    console.log("Usuario de Google:", datos);
+    
+    // Guarda la sesión
+    sessionStorage.setItem('usuario', datos.name);
+    sessionStorage.setItem('email', datos.email);
+    sessionStorage.setItem('foto', datos.picture);
+
+    // Muestra mensaje de éxito
+    const mensaje = document.getElementById('login-mensaje');
+    mensaje.className = 'mensaje exito';
+    mensaje.textContent = `✅ Bienvenido, ${datos.name}!`;
+
+    // Redirige al dashboard después de 1.5 segundos
+    setTimeout(() => {
+        window.location.href = '/dashboard.html';
+    }, 1500);
+}
+
+// Función para decodificar el JWT que devuelve Google
+function parsearJWT(token) {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+}
