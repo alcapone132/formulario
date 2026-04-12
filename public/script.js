@@ -381,3 +381,28 @@ async function guardarNuevaContrasena() {
         btn.textContent = 'Guardar contraseña';
     }
 }
+
+// Función que Google llama automáticamente al iniciar sesión
+function manejarRespuestaGoogle(response) {
+    // response.credential es un JWT con los datos del usuario
+    const datos = parsearJWT(response.credential);
+    
+    console.log("Usuario de Google:", datos);
+    
+    // Guarda la sesión
+    sessionStorage.setItem('usuario', datos.name);
+    sessionStorage.setItem('email', datos.email);
+    sessionStorage.setItem('foto', datos.picture);
+
+    // Muestra mensaje de éxito
+    const mensaje = document.getElementById('login-mensaje');
+    mensaje.className = 'mensaje exito';
+    mensaje.textContent = `✅ Bienvenido, ${datos.name}!`;
+
+    // Redirige al dashboard después de 1.5 segundos
+    setTimeout(() => {
+        window.location.href = '/dashboard.html';
+    }, 1500);
+}
+
+// Función para decodificar el JWT que devuelve 
