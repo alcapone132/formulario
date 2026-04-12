@@ -382,30 +382,29 @@ async function guardarNuevaContrasena() {
     }
 }
 
-// Función que Google llama automáticamente al iniciar sesión
+//funcion inicio seccion google!!
+
 function manejarRespuestaGoogle(response) {
-    // response.credential es un JWT con los datos del usuario
     const datos = parsearJWT(response.credential);
-    
-    console.log("Usuario de Google:", datos);
-    
-    // Guarda la sesión
-    sessionStorage.setItem('usuario', datos.name);
-    sessionStorage.setItem('email', datos.email);
-    sessionStorage.setItem('foto', datos.picture);
+
+    // Guarda en el mismo formato que usa el dashboard
+    sessionStorage.setItem('sesion', JSON.stringify({
+        usuario: datos.name,
+        email: datos.email,
+        foto: datos.picture,
+        fechaLogin: new Date().toISOString()
+    }));
 
     // Muestra mensaje de éxito
     const mensaje = document.getElementById('login-mensaje');
-    mensaje.className = 'mensaje exito';
+    mensaje.className = 'mensaje exito show';
     mensaje.textContent = `✅ Bienvenido, ${datos.name}!`;
 
-    // Redirige al dashboard después de 1.5 segundos
+    // Redirige al dashboard
     setTimeout(() => {
         window.location.href = '/dashboard.html';
     }, 1500);
 }
-
-// Función para decodificar el JWT que devuelve 
 
 function parsearJWT(token) {
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
