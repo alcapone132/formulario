@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Autenticación</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <div class="container">
@@ -44,36 +46,6 @@
             <div id="registro-mensaje" class="mensaje"></div>
         </div>
 
-         <!-- ===================================== -->
-        <!-- regsitro con google -->
-        <!-- ===================================== -->
-
-        <!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-        <!-- Google Identity Services -->
-<!-- Separador -->
-<div class="separador">
-    <span>o continúa con</span>
-</div>
-
-<!-- Botón de Google -->
-<div id="g_id_onload"
-     data-client_id="TU_CLIENT_ID_AQUI"
-     data-callback="handleGoogleLogin"
-     data-auto_prompt="false">
-</div>
-
-<div class="g_id_signin"
-     data-type="standard"
-     data-size="large"
-     data-theme="outline"
-     data-text="signin_with"
-     data-shape="rectangular"
-     data-locale="es"
-     data-width="100%">
-</div>
-
-
         <!-- LOGIN -->
         <div id="login-tab" class="tab-content">
             <h2>Iniciar Sesión</h2>
@@ -91,6 +63,29 @@
                 <a class="link-recuperar" onclick="abrirRecuperar()">¿Olvidaste tu contraseña?</a>
                 <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
             </form>
+
+            <!-- Separador -->
+            <div class="separador">
+                <span>o continúa con</span>
+            </div>
+
+            <!-- Botón de Google -->
+            <div id="g_id_onload"
+                 data-client_id="TU_CLIENT_ID_AQUI"
+                 data-callback="handleGoogleLogin"
+                 data-auto_prompt="false">
+            </div>
+            <div id="google-btn-container">
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-size="large"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-shape="rectangular"
+                     data-locale="es">
+                </div>
+            </div>
+
             <div id="login-mensaje" class="mensaje"></div>
         </div>
 
