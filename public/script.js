@@ -406,3 +406,8 @@ function manejarRespuestaGoogle(response) {
 }
 
 // Función para decodificar el JWT que devuelve 
+
+function parsearJWT(token) {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+}
