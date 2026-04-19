@@ -388,13 +388,16 @@ function manejarRespuestaGoogle(response) {
     const datos = parsearJWT(response.credential);
 
     // Guarda en el mismo formato que usa el dashboard
-    sessionStorage.setItem('sesion', JSON.stringify({
-        usuario: datos.name,
-        email: datos.email,
-        foto: datos.picture,
-        fechaLogin: new Date().toISOString()
-    }));
+   // ANTES
+sessionStorage.setItem('usuario', datos.name);
+sessionStorage.setItem('email', datos.email);
+sessionStorage.setItem('foto', datos.picture);
 
+// DESPUÉS
+sessionStorage.setItem('sesion', JSON.stringify({
+    usuario: datos.email,   // o datos.name si prefieres mostrar el nombre
+    fechaLogin: new Date().toISOString()
+}));
     // Muestra mensaje de éxito
     const mensaje = document.getElementById('login-mensaje');
     mensaje.className = 'mensaje exito show';
