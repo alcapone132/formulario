@@ -5,9 +5,16 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 const https = require('https');
 const path = require('path');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// =========================================
+// CLIENTE DE GOOGLE
+// =========================================
+const GOOGLE_CLIENT_ID = '622462285124-jlk2v1mk79amua9nkt3od3c8bo1a5h4l.apps.googleusercontent.com';
+const clienteGoogle = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://af8791052_db_user:QzttH0rV6xNilcI6@cluster0.ro1kddo.mongodb.net/formulario')
@@ -16,8 +23,12 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://af8791052_db_user:Qzt
 
 // Modelo de Usuario
 const usuarioSchema = new mongoose.Schema({
-  usuario: { type: String, required: true, unique: true },
-  contrasena: { type: String, required: true },
+  usuario:       { type: String, required: true, unique: true },
+  contrasena:    { type: String, default: null },
+  nombre:        { type: String, default: '' },
+  foto:          { type: String, default: '' },
+  proveedor:     { type: String, default: 'email' }, // 'email' | 'google'
+  ultimoLogin:   { type: Date },
   fechaRegistro: { type: Date, default: Date.now }
 });
 const Usuario = mongoose.model('Usuario', usuarioSchema);
@@ -150,7 +161,7 @@ app.post('/api/verificar', async (req, res) => {
         if (pendiente.codigo !== codigo.trim())
             return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
 
-        await Usuario.create({ usuario, contrasena: pendiente.contrasenaHash });
+        await Usuario.create({ usuario, contrasena: pendiente.contrasenaHash, proveedor: 'email' });
         delete codigosPendientes[usuario];
 
         console.log(`✓ Usuario verificado y registrado: ${usuario}`);
@@ -167,7 +178,7 @@ app.post('/api/verificar', async (req, res) => {
     }
 });
 
-// Login
+// Login con email y contraseña
 app.post('/api/login', async (req, res) => {
     try {
         const { usuario, contrasena } = req.body;
@@ -177,6 +188,10 @@ app.post('/api/login', async (req, res) => {
         const usuarioEncontrado = await Usuario.findOne({ usuario });
         if (!usuarioEncontrado)
             return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
+
+        // Si la cuenta es de Google no tiene contraseña
+        if (usuarioEncontrado.proveedor === 'google')
+            return res.status(401).json({ exito: false, mensaje: 'Esta cuenta usa Google. Inicia sesión con Google.' });
 
         const valido = await bcrypt.compare(contrasena, usuarioEncontrado.contrasena);
         if (!valido)
@@ -188,6 +203,68 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error('Error en login:', error);
         res.status(500).json({ exito: false, mensaje: 'Error interno del servidor' });
+    }
+});
+
+// =========================================
+// LOGIN CON GOOGLE
+// Verifica el token con Google, guarda el
+// usuario en MongoDB si no existe
+// POST /api/google-login
+// Body: { credential }
+// =========================================
+app.post('/api/google-login', async (req, res) => {
+    try {
+        const { credential } = req.body;
+
+        if (!credential)
+            return res.status(400).json({ exito: false, mensaje: 'Token de Google requerido' });
+
+        // Verifica el token directamente con Google
+        const ticket = await clienteGoogle.verifyIdToken({
+            idToken: credential,
+            audience: GOOGLE_CLIENT_ID
+        });
+
+        const payload = ticket.getPayload();
+        const email   = payload.email;
+        const nombre  = payload.name;
+        const foto    = payload.picture;
+
+        let usuarioExistente = await Usuario.findOne({ usuario: email });
+
+        if (!usuarioExistente) {
+            // Primera vez — lo registra automáticamente en MongoDB
+            await Usuario.create({
+                usuario:       email,
+                contrasena:    null,
+                nombre,
+                foto,
+                proveedor:     'google',
+                ultimoLogin:   new Date(),
+                fechaRegistro: new Date()
+            });
+            console.log(`✓ Nuevo usuario de Google registrado: ${email}`);
+        } else {
+            // Ya existe — actualiza nombre, foto y último login
+            await Usuario.updateOne(
+                { usuario: email },
+                { nombre, foto, ultimoLogin: new Date() }
+            );
+            console.log(`✓ Login con Google: ${email}`);
+        }
+
+        res.status(200).json({
+            exito: true,
+            mensaje: 'Autenticación con Google exitosa',
+            usuario: email,
+            nombre,
+            fechaLogin: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Error verificando token de Google:', error);
+        res.status(401).json({ exito: false, mensaje: 'Token de Google inválido o expirado' });
     }
 });
 
@@ -216,6 +293,9 @@ app.post('/api/recuperar', async (req, res) => {
         const existe = await Usuario.findOne({ usuario });
         if (!existe)
             return res.status(404).json({ exito: false, mensaje: 'No existe una cuenta con ese correo' });
+
+        if (existe.proveedor === 'google')
+            return res.status(400).json({ exito: false, mensaje: 'Esta cuenta usa Google. No necesita contraseña.' });
 
         const codigo = generarCodigo();
         codigosPendientes[`recuperar_${usuario}`] = {
