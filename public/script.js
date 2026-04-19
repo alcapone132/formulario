@@ -382,31 +382,46 @@ async function guardarNuevaContrasena() {
     }
 }
 
-//funcion inicio seccion google!!
+// =========================================
+// LOGIN CON GOOGLE
+// =========================================
 
-function manejarRespuestaGoogle(response) {
-    const datos = parsearJWT(response.credential);
+/**
+ * Google llama a esta función automáticamente.
+ * Envía el token crudo al servidor para verificarlo
+ * con Google y guardar el usuario en MongoDB.
+ */
+async function manejarRespuestaGoogle(response) {
+    const mensajeEl = document.getElementById('login-mensaje');
 
-    // Guarda en el mismo formato que usa el dashboard
-   // ANTES
-sessionStorage.setItem('usuario', datos.name);
-sessionStorage.setItem('email', datos.email);
-sessionStorage.setItem('foto', datos.picture);
+    try {
+        const res = await fetch(`${API_URL}/google-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: response.credential })
+        });
 
-// DESPUÉS
-sessionStorage.setItem('sesion', JSON.stringify({
-    usuario: datos.email,   // o datos.name si prefieres mostrar el nombre
-    fechaLogin: new Date().toISOString()
-}));
-    // Muestra mensaje de éxito
-    const mensaje = document.getElementById('login-mensaje');
-    mensaje.className = 'mensaje exito show';
-    mensaje.textContent = `✅ Bienvenido, ${datos.name}!`;
+        const data = await res.json();
 
-    // Redirige al dashboard
-    setTimeout(() => {
-        window.location.href = '/dashboard.html';
-    }, 1500);
+        if (data.exito) {
+            sessionStorage.setItem('sesion', JSON.stringify({
+                usuario: data.usuario,
+                fechaLogin: data.fechaLogin
+            }));
+
+            mensajeEl.className = 'mensaje exito show';
+            mensajeEl.textContent = `✅ Bienvenido/a, ${data.nombre}!`;
+
+            setTimeout(() => { window.location.href = '/dashboard.html'; }, 1500);
+        } else {
+            mensajeEl.className = 'mensaje error show';
+            mensajeEl.textContent = data.mensaje || 'Error al iniciar sesión con Google';
+        }
+    } catch (error) {
+        console.error('Error con Google login:', error);
+        mensajeEl.className = 'mensaje error show';
+        mensajeEl.textContent = 'Error de conexión al iniciar sesión con Google';
+    }
 }
 
 function parsearJWT(token) {
