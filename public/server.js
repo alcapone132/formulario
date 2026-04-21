@@ -6,11 +6,18 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
+const { OAuth2Client } = require('google-auth-library');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// =========================================
+// CLIENTE DE GOOGLE
+// =========================================
+const GOOGLE_CLIENT_ID = '622462285124-jlk2v1mk79amua9nkt3od3c8bo1a5h4l.apps.googleusercontent.com';
+const clienteGoogle = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // =========================================
 // CONFIGURACIÓN DE NODEMAILER (Gmail + IPv4)
@@ -105,7 +112,6 @@ async function enviarCodigoEmail(email, codigo) {
 /**
  * PASO 1 - Registro: recibe datos y envía código al email
  * POST /api/registro
- * Body: { usuario, contrasena }
  */
 app.post('/api/registro', async (req, res) => {
     try {
@@ -123,24 +129,22 @@ app.post('/api/registro', async (req, res) => {
         if (buscarUsuario(usuario))
             return res.status(409).json({ exito: false, mensaje: 'El usuario ya existe' });
 
-        // Genera y guarda el código temporalmente
         const codigo = generarCodigo();
         const contrasenaHash = await bcrypt.hash(contrasena, 10);
 
         codigosPendientes[usuario] = {
             codigo,
-            expira: Date.now() + 10 * 60 * 1000, // 10 minutos
+            expira: Date.now() + 10 * 60 * 1000,
             datosUsuario: {
                 id: Date.now(),
                 usuario,
                 contrasena: contrasenaHash,
+                proveedor: 'email',
                 fechaRegistro: new Date().toISOString()
             }
         };
 
-        // Envía el código al email
         await enviarCodigoEmail(usuario, codigo);
-
         console.log(`✓ Código enviado a: ${usuario}`);
 
         res.status(200).json({
@@ -158,7 +162,6 @@ app.post('/api/registro', async (req, res) => {
 /**
  * PASO 2 - Verificar código y completar registro
  * POST /api/verificar
- * Body: { usuario, codigo }
  */
 app.post('/api/verificar', (req, res) => {
     try {
@@ -180,7 +183,6 @@ app.post('/api/verificar', (req, res) => {
         if (pendiente.codigo !== codigo.trim())
             return res.status(400).json({ exito: false, mensaje: 'Código incorrecto' });
 
-        // Código correcto → guarda el usuario
         const usuarios = leerUsuarios();
         usuarios.push(pendiente.datosUsuario);
         guardarUsuarios(usuarios);
@@ -201,7 +203,7 @@ app.post('/api/verificar', (req, res) => {
 });
 
 /**
- * Login
+ * Login con email y contraseña
  * POST /api/login
  */
 app.post('/api/login', async (req, res) => {
@@ -214,6 +216,9 @@ app.post('/api/login', async (req, res) => {
         const usuarioEncontrado = buscarUsuario(usuario);
         if (!usuarioEncontrado)
             return res.status(401).json({ exito: false, mensaje: 'Usuario o contraseña incorrectos' });
+
+        if (usuarioEncontrado.proveedor === 'google')
+            return res.status(401).json({ exito: false, mensaje: 'Esta cuenta usa Google. Inicia sesión con Google.' });
 
         const contrasenaValida = await bcrypt.compare(contrasena, usuarioEncontrado.contrasena);
         if (!contrasenaValida)
@@ -235,6 +240,68 @@ app.post('/api/login', async (req, res) => {
 });
 
 /**
+ * Login con Google — verifica token y guarda en JSON
+ * POST /api/google-login
+ * Body: { credential }
+ */
+app.post('/api/google-login', async (req, res) => {
+    try {
+        const { credential } = req.body;
+
+        if (!credential)
+            return res.status(400).json({ exito: false, mensaje: 'Token de Google requerido' });
+
+        // Verifica el token con los servidores de Google
+        const ticket = await clienteGoogle.verifyIdToken({
+            idToken: credential,
+            audience: GOOGLE_CLIENT_ID
+        });
+
+        const payload = ticket.getPayload();
+        const email  = payload.email;
+        const nombre = payload.name;
+        const foto   = payload.picture;
+
+        const usuarios = leerUsuarios();
+        const idx = usuarios.findIndex(u => u.usuario === email);
+
+        if (idx === -1) {
+            // Primera vez — lo registra automáticamente
+            usuarios.push({
+                id: Date.now(),
+                usuario: email,
+                nombre,
+                foto,
+                contrasena: null,
+                proveedor: 'google',
+                fechaRegistro: new Date().toISOString()
+            });
+            console.log(`✓ Nuevo usuario de Google registrado: ${email}`);
+        } else {
+            // Ya existe — actualiza nombre, foto y último login
+            usuarios[idx].nombre = nombre;
+            usuarios[idx].foto   = foto;
+            usuarios[idx].ultimoLogin = new Date().toISOString();
+            console.log(`✓ Login con Google: ${email}`);
+        }
+
+        guardarUsuarios(usuarios);
+
+        res.status(200).json({
+            exito: true,
+            mensaje: 'Autenticación con Google exitosa',
+            usuario: email,
+            nombre,
+            fechaLogin: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('Error verificando token de Google:', error);
+        res.status(401).json({ exito: false, mensaje: 'Token de Google inválido o expirado' });
+    }
+});
+
+/**
  * Listar usuarios (sin contraseñas)
  * GET /api/usuarios
  */
@@ -243,6 +310,8 @@ app.get('/api/usuarios', (req, res) => {
         const usuarios = leerUsuarios().map(u => ({
             id: u.id,
             usuario: u.usuario,
+            nombre: u.nombre || u.usuario,
+            proveedor: u.proveedor || 'email',
             fechaRegistro: u.fechaRegistro
         }));
         res.status(200).json({ exito: true, cantidad: usuarios.length, usuarios });
@@ -267,10 +336,11 @@ app.listen(PORT, () => {
     console.log(`📁 Base de datos: ${DB_PATH}`);
     console.log('=========================================');
     console.log('Endpoints disponibles:');
-    console.log('  POST /api/registro  - Envía código al email');
-    console.log('  POST /api/verificar - Verifica código y crea cuenta');
-    console.log('  POST /api/login     - Inicio de sesión');
-    console.log('  GET  /api/usuarios  - Listar usuarios');
+    console.log('  POST /api/registro     - Envía código al email');
+    console.log('  POST /api/verificar    - Verifica código y crea cuenta');
+    console.log('  POST /api/login        - Inicio de sesión');
+    console.log('  POST /api/google-login - Inicio de sesión con Google');
+    console.log('  GET  /api/usuarios     - Listar usuarios');
     console.log('=========================================');
 });
 
@@ -281,4 +351,3 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
     console.error('Promise rechazada:', reason);
 });
-
